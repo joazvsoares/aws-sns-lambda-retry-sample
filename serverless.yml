@@ -1,0 +1,46 @@
+service: aws-sns-lambda-retry
+
+provider:
+  name: aws
+  runtime: python3.8
+  region: us-east-1
+  environment:
+    TOPIC_ARN:
+      Fn::Join:
+        - ""
+        - - "arn:aws:sns:"
+          - ${opt:region, self:provider.region}
+          - ":"
+          - Ref: "AWS::AccountId"
+          - ":my-topic-sns"
+  iam:
+    role:
+      statements:
+        - Effect: "Allow"
+          Action:
+            - "sns:Publish"
+            - "sns:Subscribe"
+            - "sns:Unsubscribe"
+            - "sns:Receive"
+            - "sqs:SendMessage"
+          Resource: "*"
+
+functions:
+  consumer:
+    handler: consumer.handler
+    events:
+      - sns:
+          topicName: my-topic-sns
+          filterPolicy: {} # You can add a filter policy if needed
+    maximumRetryAttempts: 2 # Specify the maximum retry attempts
+    onError: arn:aws:sqs:us-east-1:438001794952:my-test-dead-letter-queue
+
+  producer:
+    handler: producer.handler
+
+resources:
+  Resources:
+    MyDeadLetterQueue:
+      Type: "AWS::SQS::Queue"
+      Properties:
+        QueueName: "my-test-dead-letter-queue"
